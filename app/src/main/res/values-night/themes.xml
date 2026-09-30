@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      深色模式下的窗口主题。
+      parent 换成非 Light 版本，避免深色系统下启动瞬间闪白屏。
+    -->
+    <style name="Theme.WwtCompanion" parent="@android:style/Theme.Material.NoActionBar" />
+</resources>
