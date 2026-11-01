@@ -4,6 +4,12 @@
     <!-- 需要联网访问库洛官方接口 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Android 13 起发通知要运行时权限，在设置页打开提醒开关时申请 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 重启后系统会清掉所有闹钟，需要按上次记下的时刻重新排期 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!--
       allowBackup 必须是 false：SharedPreferences 里存着 oauthCode（等效登录态），
       抽卡存档里存着 record_id（等效令牌）。开着的话这些会被一起同步到云端备份，
@@ -26,6 +32,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 闹钟到点时由系统唤醒。只用应用内的显式 PendingIntent 触发，不对外暴露 -->
+        <receiver
+            android:name=".notify.ReminderReceiver"
+            android:exported="false" />
+
+        <!-- BOOT_COMPLETED 是受保护广播，只有系统能发，所以 exported 为 true 是安全的 -->
+        <receiver
+            android:name=".notify.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

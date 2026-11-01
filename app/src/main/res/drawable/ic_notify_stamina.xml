@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  通知栏小图标。必须是纯单色 + alpha，系统会把所有不透明像素涂成统一颜色；
+  用彩色 PNG 当小图标在 Android 8+ 上会显示成一团灰块。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13,2 L4.5,13.5 L11,13.5 L10,22 L19,10.5 L12.5,10.5 Z" />
+</vector>

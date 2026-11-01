@@ -1,11 +1,21 @@
 package cn.tealc.wwtcompanion
 
 import android.os.Bundle
+import android.Manifest
+import android.content.Context
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import cn.tealc.wwtcompanion.gacha.GachaScreen
 import cn.tealc.wwtcompanion.gacha.GachaStore
+import cn.tealc.wwtcompanion.notify.DEFAULT_LEAD_MILLIS
+import cn.tealc.wwtcompanion.notify.ReminderScheduler
+import cn.tealc.wwtcompanion.notify.ReminderStore
+import cn.tealc.wwtcompanion.notify.StaminaNotifier
+import cn.tealc.wwtcompanion.notify.applyFetchedAccount
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -41,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,7 +70,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,6 +116,36 @@ private fun AppScreen(store: CredentialStore) {
 
     val scope = rememberCoroutineScope()
 
+    // —— 体力快满提醒 ——
+    val context = LocalContext.current
+    val reminderStore = remember { ReminderStore(context) }
+    var reminderEnabled by remember { mutableStateOf(reminderStore.load().enabled) }
+
+    // 打开开关。已经满的时候不补发「已满」通知，只把后续排期接上
+    fun setReminder(want: Boolean) {
+        reminderStore.save(reminderStore.load().copy(enabled = want))
+        reminderEnabled = want
+        if (!want) {
+            ReminderScheduler.cancel(context)
+        } else {
+            account?.let {
+                applyFetchedAccount(
+                    context,
+                    reminderStore,
+                    ApiResult.Success(it, clockOffset),
+                    allowNotify = false,
+                )
+            }
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        // 授没授权都把开关打开；没授权时状态文案会明确提示，而不是静默失效
+        setReminder(true)
+    }
+
     // 查询逻辑抽出来，首次加载 / 手动刷新 / 切回前台共用
     val refresh: suspend () -> Unit = {
         loading = true
@@ -113,6 +157,8 @@ private fun AppScreen(store: CredentialStore) {
                 clockOffset = result.clockOffsetMillis
                 updatedAt = System.currentTimeMillis()
                 status = ""
+                // 每次取数成功都重排整条提醒链：体力满着时链会停住，打开 App 就重新武装
+                applyFetchedAccount(context, reminderStore, result)
             }
             ApiResult.TokenExpired ->
                 status = "oauthCode 已失效，请在 PC 启动器重新登录后重新获取"
@@ -164,6 +210,18 @@ private fun AppScreen(store: CredentialStore) {
                     }
                     showSettings = false
                 },
+                reminderEnabled = reminderEnabled,
+                reminderStatusProvider = { reminderStatusText(context, reminderStore, reminderEnabled) },
+                onToggleReminder = { want ->
+                    if (want && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        !StaminaNotifier.canPost(context)
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        setReminder(want)
+                    }
+                },
+                onTestNotification = { StaminaNotifier.notifyTest(context) },
             )
         }
 
@@ -350,7 +408,14 @@ private fun CredentialSettingsScreen(
     current: String,
     onCancel: () -> Unit,
     onSave: (String) -> Unit,
+    reminderEnabled: Boolean,
+    reminderStatusProvider: () -> String,
+    onToggleReminder: (Boolean) -> Unit,
+    onTestNotification: () -> Unit,
 ) {
+    // 「下次检查 00:10」这类文案会过期。每秒重算一次，别让界面停在旧值上假装链条还活着
+    val ticker = rememberTicker()
+    val reminderStatus = remember(ticker, reminderEnabled) { reminderStatusProvider() }
     // 用 rememberSaveable：转屏/进程重建后，输到一半的内容也不会丢
     var input by rememberSaveable(current) { mutableStateOf(current) }
 
@@ -397,6 +462,45 @@ private fun CredentialSettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        HorizontalDivider()
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "体力快满提醒",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = "满前 ${DEFAULT_LEAD_MILLIS / 60_000} 分钟提醒一次，真正满了再提醒一次",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reminderEnabled, onCheckedChange = onToggleReminder)
+        }
+
+        Text(
+            text = reminderStatus,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        OutlinedButton(onClick = onTestNotification, modifier = Modifier.fillMaxWidth()) {
+            Text("发一条测试通知")
+        }
+
+        Text(
+            text = "· 后台唤醒用的是非精确闹钟，可能晚几分钟，但不需要任何特殊权限\n" +
+                "· 提醒一直不来，就去系统设置里把本应用加进「自启动」和「电池优化」白名单\n" +
+                "· 体力满着的时候不会再提醒，等你花掉体力、下次刷新后自动接上",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
                 Text("返回")
@@ -410,6 +514,17 @@ private fun CredentialSettingsScreen(
             }
         }
     }
+}
+
+/** 设置页里那行状态：让「提醒链条还活着没有」看得见，而不是静默失效 */
+private fun reminderStatusText(context: Context, store: ReminderStore, enabled: Boolean): String {
+    if (!enabled) return "已关闭"
+    if (!StaminaNotifier.canPost(context)) return "通知权限未授予，提醒不会出现"
+    val skipped = store.lastSkipReason()
+    if (skipped.isNotBlank()) return skipped
+    val at = store.nextAlarmAt()
+    if (at <= 0L) return "暂无排期（体力已满，或还没取到数据）"
+    return "下次检查：${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(at))}"
 }
 
 @Composable
