@@ -15,7 +15,7 @@ class ReminderStore(context: Context) {
     fun load(): ReminderState = ReminderState(
         enabled = prefs.getBoolean(KEY_ENABLED, false),
         cycleFullAt = prefs.getLong(KEY_CYCLE, 0L),
-        firedSoon = prefs.getBoolean(KEY_FIRED_SOON, false),
+        firedLeadMask = prefs.getInt(KEY_LEAD_MASK, 0),
         firedFull = prefs.getBoolean(KEY_FIRED_FULL, false),
     )
 
@@ -23,7 +23,7 @@ class ReminderStore(context: Context) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, state.enabled)
             .putLong(KEY_CYCLE, state.cycleFullAt)
-            .putBoolean(KEY_FIRED_SOON, state.firedSoon)
+            .putInt(KEY_LEAD_MASK, state.firedLeadMask)
             .putBoolean(KEY_FIRED_FULL, state.firedFull)
             .apply()
     }
@@ -52,7 +52,7 @@ class ReminderStore(context: Context) {
     private companion object {
         const val KEY_ENABLED = "enabled"
         const val KEY_CYCLE = "cycle_full_at"
-        const val KEY_FIRED_SOON = "fired_soon"
+        const val KEY_LEAD_MASK = "fired_lead_mask"
         const val KEY_FIRED_FULL = "fired_full"
         const val KEY_NEXT_AT = "next_alarm_at"
         const val KEY_SKIP = "last_skip_reason"

@@ -120,7 +120,6 @@ internal fun applyFetchedAccount(
         energy = account.energy,
         maxEnergy = account.maxEnergy,
         fullAtServer = account.energyRecoverTime,
-        leadMillis = DEFAULT_LEAD_MILLIS,
     )
 
     when (val decision = decide(state, input)) {
@@ -133,17 +132,17 @@ internal fun applyFetchedAccount(
             // 刚打开开关时不要补发历史通知（比如「体力已满」），但接下来该提醒的照常排
             val posted = if (!allowNotify) {
                 true
-            } else when (decision.kind) {
-                ReminderKind.SOON -> {
+            } else when (val kind = decision.kind) {
+                is ReminderKind.Soon -> {
                     val remaining = input.fullAtServer - (input.deviceNow + input.clockOffset)
-                    StaminaNotifier.notifySoon(context, minutesRoundedUp(remaining))
+                    StaminaNotifier.notifySoon(context, minutesRoundedUp(remaining), kind.index)
                 }
-                ReminderKind.FULL -> StaminaNotifier.notifyFull(context)
+                ReminderKind.Full -> StaminaNotifier.notifyFull(context)
             }
             store.save(
-                when (decision.kind) {
-                    ReminderKind.SOON -> state.copy(firedSoon = true)
-                    ReminderKind.FULL -> state.copy(firedFull = true)
+                when (val kind = decision.kind) {
+                    is ReminderKind.Soon -> state.withFiredLead(kind.index)
+                    ReminderKind.Full -> state.copy(firedFull = true)
                 },
             )
             if (allowNotify && !posted) {

@@ -21,9 +21,11 @@ import cn.tealc.wwtcompanion.R
 object StaminaNotifier {
 
     private const val CHANNEL_ID = "stamina"
-    private const val ID_SOON = 1001
-    private const val ID_FULL = 1002
-    private const val ID_TEST = 1003
+
+    // 每个提前节点一条独立通知，所以 id 按节点下标错开，互不覆盖
+    private const val ID_SOON_BASE = 1001
+    private const val ID_FULL = 1010
+    private const val ID_TEST = 1099
 
     /** 渠道必须在发通知之前建好；重复调用无副作用 */
     fun ensureChannel(context: Context) {
@@ -48,8 +50,8 @@ object StaminaNotifier {
             true
         }
 
-    fun notifySoon(context: Context, minutesLeft: Long): Boolean =
-        post(context, ID_SOON, "体力快满了", "还有约 $minutesLeft 分钟就回满")
+    fun notifySoon(context: Context, minutesLeft: Long, leadIndex: Int): Boolean =
+        post(context, ID_SOON_BASE + leadIndex, "体力快满了", "还有约 $minutesLeft 分钟就回满")
 
     fun notifyFull(context: Context): Boolean =
         post(context, ID_FULL, "体力已满", "回复已经停止，上线清一下吧")

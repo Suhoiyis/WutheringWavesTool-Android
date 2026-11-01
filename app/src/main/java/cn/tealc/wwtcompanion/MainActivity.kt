@@ -11,7 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import cn.tealc.wwtcompanion.gacha.GachaScreen
 import cn.tealc.wwtcompanion.gacha.GachaStore
-import cn.tealc.wwtcompanion.notify.DEFAULT_LEAD_MILLIS
+import cn.tealc.wwtcompanion.notify.REMINDER_LEADS_MINUTES
 import cn.tealc.wwtcompanion.notify.ReminderScheduler
 import cn.tealc.wwtcompanion.notify.ReminderStore
 import cn.tealc.wwtcompanion.notify.StaminaNotifier
@@ -475,7 +475,8 @@ private fun CredentialSettingsScreen(
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Text(
-                    text = "满前 ${DEFAULT_LEAD_MILLIS / 60_000} 分钟提醒一次，真正满了再提醒一次",
+                    text = "满前 ${REMINDER_LEADS_MINUTES.joinToString(" 和 ")} 分钟各提醒一次，" +
+                        "真正满了再提醒一次",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
